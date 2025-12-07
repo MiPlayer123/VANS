@@ -2,7 +2,7 @@
 """
 VANS: Visual Analogy Network Solver - Main Entry Point
 
-Runs the full pipeline: feature extraction -> training -> evaluation
+Runs the full pipeline: [data generation] -> feature extraction -> training -> evaluation
 
 Usage:
     # Run with defaults from config.py
@@ -13,6 +13,9 @@ Usage:
 
     # Quick test mode
     python main.py --test-mode
+
+    # Generate new data and train on it
+    python main.py --generate-data --num-generate 1000
 
     # Skip feature extraction (if already done)
     python main.py --skip-extraction
@@ -36,7 +39,8 @@ import argparse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config
-from config import get_paths, get_training_config, get_model_config, ensure_dirs, print_config, CONFIG_SHORT
+from config import (get_paths, get_training_config, get_model_config, get_generation_config,
+                    ensure_dirs, print_config, CONFIG_SHORT)
 
 
 def main():
@@ -48,6 +52,7 @@ Examples:
   python main.py                              # Run with defaults
   python main.py --data-dir /path/to/data     # Custom data path
   python main.py --test-mode                  # Quick test (1 epoch)
+  python main.py --generate-data              # Generate new data first
   python main.py --skip-extraction            # Skip feature extraction
   python main.py --eval-only                  # Evaluation only
         """
@@ -57,8 +62,13 @@ Examples:
     parser.add_argument('--data-dir', type=str, help='Path to RAVEN dataset')
     parser.add_argument('--output-dir', type=str, help='Output directory for features, checkpoints, results')
 
+    # Data generation arguments
+    parser.add_argument('--generate-data', action='store_true', help='Generate new RAVEN data before training')
+    parser.add_argument('--num-generate', type=int, help='Number of samples per config to generate')
+    parser.add_argument('--generated-data-dir', type=str, help='Directory for generated data')
+
     # Mode arguments
-    parser.add_argument('--test-mode', action='store_true', help='Quick test mode (1 epoch, 50 samples)')
+    parser.add_argument('--test-mode', action='store_true', help='Quick test mode (1 epoch, 10 samples)')
     parser.add_argument('--skip-extraction', action='store_true', help='Skip feature extraction')
     parser.add_argument('--eval-only', action='store_true', help='Run evaluation only')
 
@@ -74,12 +84,20 @@ Examples:
     # Apply test mode if specified (modifies config module)
     if args.test_mode:
         config.TEST_MODE = True
-        print("[TEST MODE] Running quick test (1 epoch, 50 samples)")
+        print("[TEST MODE] Running quick test (1 epoch, 10 samples)")
+
+    # Determine if using generated data
+    use_generated = args.generate_data or config.USE_GENERATED_DATA
 
     # Get configuration
-    paths = get_paths(data_dir=args.data_dir, output_dir=args.output_dir)
+    paths = get_paths(
+        data_dir=args.data_dir,
+        output_dir=args.output_dir,
+        use_generated=use_generated
+    )
     train_config = get_training_config()
     model_config = get_model_config()
+    gen_config = get_generation_config()
 
     # Apply CLI overrides
     if args.batch_size:
@@ -88,6 +106,11 @@ Examples:
         train_config['max_epochs'] = args.epochs
     if args.lr:
         train_config['lr'] = args.lr
+    if args.num_generate:
+        gen_config['num_samples'] = args.num_generate
+    if args.generated_data_dir:
+        gen_config['save_dir'] = args.generated_data_dir
+        paths['data_dir'] = args.generated_data_dir
 
     # Print configuration
     print_config()
@@ -107,6 +130,30 @@ Examples:
 
     # Setup device
     device = setup_device(config.SEED)
+
+    # ========================
+    # STEP 0: Data Generation (Optional)
+    # ========================
+    if args.generate_data:
+        print("\n" + "=" * 60)
+        print("STEP 0: Data Generation")
+        print("=" * 60)
+
+        from src.datagen import generate_dataset
+
+        # Check if data already exists
+        if os.path.exists(gen_config['save_dir']) and os.listdir(gen_config['save_dir']):
+            print(f"[WARN] Generated data directory already exists: {gen_config['save_dir']}")
+            print("       Skipping generation. Delete directory to regenerate.")
+        else:
+            generate_dataset(
+                num_samples=gen_config['num_samples'],
+                save_dir=gen_config['save_dir'],
+                seed=gen_config['seed']
+            )
+
+        # Update data_dir to use generated data
+        paths['data_dir'] = gen_config['save_dir']
 
     # ========================
     # STEP 1: Feature Extraction

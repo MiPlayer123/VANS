@@ -35,6 +35,13 @@ COLAB_DATA_DIR = "/content/drive/MyDrive/VANS/data/I-RAVEN"
 COLAB_OUTPUT_DIR = "/content/drive/MyDrive/VANS"
 
 # =========================
+# DATA SOURCE
+# =========================
+USE_GENERATED_DATA = False  # True = generate new data, False = use existing DATA_DIR
+GENERATED_DATA_DIR = "./generated_data"  # Where to save/load generated data
+GENERATE_NUM_SAMPLES = 1000  # Samples per config when generating new data
+
+# =========================
 # DATA
 # =========================
 NUM_SAMPLES_PER_CONFIG = 5000  # Samples per configuration. Options: 50, 2000, 5000, 10000, None (all)
@@ -90,23 +97,31 @@ CONFIG_SHORT = {
 # AUTO-COMPUTED (Don't edit below unless you know what you're doing)
 # ============================================================
 
-def get_paths(data_dir=None, output_dir=None):
+def get_paths(data_dir=None, output_dir=None, use_generated=None):
     """
     Returns resolved paths based on environment.
 
     Args:
         data_dir: Override DATA_DIR (for CLI usage)
         output_dir: Override OUTPUT_DIR (for CLI usage)
+        use_generated: Override USE_GENERATED_DATA (for CLI usage)
 
     Returns:
-        dict with keys: data_dir, output_dir, features_dir, checkpoint_dir, results_dir
+        dict with keys: data_dir, output_dir, features_dir, checkpoint_dir, results_dir, generated_data_dir
     """
+    # Determine if using generated data
+    gen = use_generated if use_generated is not None else USE_GENERATED_DATA
+
     if USE_COLAB:
         base = output_dir or COLAB_OUTPUT_DIR
         data = data_dir or COLAB_DATA_DIR
     else:
         base = output_dir or OUTPUT_DIR
-        data = data_dir or DATA_DIR
+        # If using generated data and no override, use GENERATED_DATA_DIR
+        if gen and data_dir is None:
+            data = GENERATED_DATA_DIR
+        else:
+            data = data_dir or DATA_DIR
 
     return {
         'data_dir': data,
@@ -114,6 +129,8 @@ def get_paths(data_dir=None, output_dir=None):
         'features_dir': os.path.join(base, 'features'),
         'checkpoint_dir': os.path.join(base, 'checkpoints'),
         'results_dir': os.path.join(base, 'results'),
+        'generated_data_dir': GENERATED_DATA_DIR,
+        'use_generated_data': gen,
     }
 
 
@@ -164,6 +181,26 @@ def get_model_config():
         'num_heads': NUM_HEADS,
         'num_layers': NUM_LAYERS,
         'dropout': DROPOUT,
+    }
+
+
+def get_generation_config():
+    """
+    Returns data generation config.
+
+    Returns:
+        dict with generation parameters
+    """
+    if TEST_MODE:
+        return {
+            'num_samples': 10,  # 10 samples per config in test mode
+            'save_dir': GENERATED_DATA_DIR,
+            'seed': SEED,
+        }
+    return {
+        'num_samples': GENERATE_NUM_SAMPLES,
+        'save_dir': GENERATED_DATA_DIR,
+        'seed': SEED,
     }
 
 

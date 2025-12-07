@@ -9,3 +9,7 @@ seaborn
 tqdm
 einops
 Pillow
+
+# Required for RAVEN data generation
+opencv-contrib-python
+scikit-image
