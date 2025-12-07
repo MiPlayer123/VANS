@@ -10,6 +10,7 @@ class CachedFeatureDataset(Dataset):
     Dataset using pre-extracted DINOv2 features.
 
     Loads features from a cached .pt file for efficient training.
+    Supports both new format (context/candidates) and legacy format (features).
     """
 
     def __init__(self, features_dict, split='train'):
@@ -21,9 +22,22 @@ class CachedFeatureDataset(Dataset):
         self.samples = []
         for key, value in features_dict.items():
             if split in key:
+                # Handle both new format (context/candidates) and legacy (features)
+                if 'context' in value:
+                    context = value['context']
+                    candidates = value['candidates']
+                elif 'features' in value:
+                    # Legacy format: features is [16, 1024]
+                    features = value['features']
+                    context = features[:8]
+                    candidates = features[8:]
+                else:
+                    print(f"Warning: Unknown format for {key}, skipping")
+                    continue
+
                 self.samples.append({
-                    'context': value['context'],       # [8, 1024]
-                    'candidates': value['candidates'], # [8, 1024]
+                    'context': context,       # [8, 1024]
+                    'candidates': candidates, # [8, 1024]
                     'target': value['target'],
                     'config': value['config'],
                     'key': key

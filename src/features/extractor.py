@@ -2,6 +2,7 @@
 
 Pre-extracts features from RAVEN images for efficient training.
 Features are cached to disk to avoid re-extraction.
+Supports incremental extraction (skips already-processed files).
 """
 
 import os
@@ -65,7 +66,14 @@ def extract_all_features(data_dir, features_dir, device, num_samples_per_config=
     """
     Extract features from all RAVEN samples and cache to disk.
 
+    Features are stored in format compatible with CachedFeatureDataset:
+    - 'context': [8, 1024] - first 8 panels
+    - 'candidates': [8, 1024] - last 8 panels
+    - 'target': int
+    - 'config': str
+
     Saves incrementally after each configuration to prevent data loss.
+    Skips already-processed files for efficient resumption.
 
     Args:
         data_dir: Path to RAVEN dataset root
@@ -78,56 +86,75 @@ def extract_all_features(data_dir, features_dir, device, num_samples_per_config=
     """
     features_file = os.path.join(features_dir, 'all_features.pt')
 
-    # Check if features already extracted with enough samples
+    # Load existing features if any
+    all_features = {}
     if os.path.exists(features_file):
-        existing = torch.load(features_file, weights_only=False)
-        existing_count = len(existing)
+        print(f"Loading existing features from {features_file}...")
+        all_features = torch.load(features_file, weights_only=False)
+        print(f"[OK] Loaded {len(all_features)} existing samples")
 
-        # Count expected samples
-        configs = sorted([d for d in os.listdir(data_dir)
-                         if os.path.isdir(os.path.join(data_dir, d))])
-        expected_per_config = num_samples_per_config or 10000
-        expected_count = len(configs) * expected_per_config
+    # Auto-detect configurations from data_dir
+    configs = sorted([d for d in os.listdir(data_dir)
+                     if os.path.isdir(os.path.join(data_dir, d))])
 
-        if existing_count >= expected_count * 0.9:  # Allow 10% tolerance
-            print(f"[OK] Features already cached at {features_file}")
-            print(f"     Samples: {existing_count}")
-            train_count = sum(1 for k in existing.keys() if 'train' in k)
-            val_count = sum(1 for k in existing.keys() if 'val' in k)
-            test_count = sum(1 for k in existing.keys() if 'test' in k)
-            print(f"     Train: {train_count}, Val: {val_count}, Test: {test_count}")
-            return existing
-        else:
-            print(f"[WARNING] Existing features ({existing_count}) < expected ({expected_count})")
-            print("Re-extracting features...")
-            del existing
+    # Count existing samples per config
+    existing_by_config = {cfg: set() for cfg in configs}
+    for key, data in all_features.items():
+        cfg = data.get('config', None)
+        if cfg and cfg in existing_by_config:
+            # Key is just the filename (e.g., "RAVEN_0_train.npz")
+            existing_by_config[cfg].add(key)
 
-    # Load backbone
+    print("\nExisting samples per config:")
+    for cfg in configs:
+        count = len(existing_by_config[cfg])
+        target = num_samples_per_config or 10000
+        status = "[OK]" if count >= target * 0.9 else "[  ]"
+        print(f"  {status} {cfg[:20]:20} {count:5}/{target}")
+
+    # Check if we have enough samples already
+    total_existing = len(all_features)
+    total_expected = len(configs) * (num_samples_per_config or 10000)
+
+    if total_existing >= total_expected * 0.9:
+        print(f"\n[OK] Features already cached ({total_existing} samples)")
+        train_count = sum(1 for k in all_features.keys() if 'train' in k)
+        val_count = sum(1 for k in all_features.keys() if 'val' in k)
+        test_count = sum(1 for k in all_features.keys() if 'test' in k)
+        print(f"     Train: {train_count}, Val: {val_count}, Test: {test_count}")
+        return all_features
+
+    # Load backbone (only if we need to extract)
     backbone = load_backbone(device)
 
     print("\nExtracting features...")
     print(f"Using {num_samples_per_config or 'ALL'} samples per config")
     print(f"Device: {device}")
-
-    # Auto-detect configurations from DATA_DIR
-    configs = sorted([d for d in os.listdir(data_dir)
-                     if os.path.isdir(os.path.join(data_dir, d))])
     print(f"Found {len(configs)} configurations")
 
-    all_features = {}
     os.makedirs(features_dir, exist_ok=True)
 
     for config in configs:
         config_dir = os.path.join(data_dir, config)
-        files = sorted(glob.glob(os.path.join(config_dir, '*.npz')))
+        all_files = sorted(glob.glob(os.path.join(config_dir, '*.npz')))
 
         # Limit files if num_samples_per_config is set
         if num_samples_per_config:
-            files = files[:num_samples_per_config]
+            all_files = all_files[:num_samples_per_config]
 
-        print(f"\nProcessing {config}: {len(files)} files")
+        # Filter out already processed files
+        existing_keys = existing_by_config.get(config, set())
+        files_to_process = [f for f in all_files
+                          if os.path.basename(f) not in existing_keys]
 
-        for filepath in tqdm(files, desc=config):
+        cached = len(all_files) - len(files_to_process)
+        print(f"\n{config}: {len(all_files)} total, {cached} cached, {len(files_to_process)} to extract")
+
+        if not files_to_process:
+            print("  [SKIP] All files already cached")
+            continue
+
+        for filepath in tqdm(files_to_process, desc=config[:15]):
             try:
                 data = np.load(filepath)
                 images = data['image']  # [16, 160, 160]
@@ -137,7 +164,7 @@ def extract_all_features(data_dir, features_dir, device, num_samples_per_config=
                 panels = preprocess_panels(images)
                 features = extract_features_batch(backbone, panels, device)
 
-                # Store
+                # Store with context/candidates split
                 key = os.path.basename(filepath)
                 all_features[key] = {
                     'context': features[:8],      # [8, 1024]
@@ -146,7 +173,7 @@ def extract_all_features(data_dir, features_dir, device, num_samples_per_config=
                     'config': config
                 }
             except Exception as e:
-                print(f"Error: {filepath}: {e}")
+                print(f"\nError: {filepath}: {e}")
                 continue
 
         # Save checkpoint after each config
@@ -162,6 +189,34 @@ def extract_all_features(data_dir, features_dir, device, num_samples_per_config=
     print(f"     Train: {train_count}, Val: {val_count}, Test: {test_count}")
 
     return all_features
+
+
+def convert_legacy_features(features_dict):
+    """
+    Convert features from legacy format (single 'features' tensor) to
+    new format (separate 'context' and 'candidates').
+
+    Args:
+        features_dict: Dictionary that may contain legacy format
+
+    Returns:
+        dict: Converted features in new format
+    """
+    converted = {}
+    for key, data in features_dict.items():
+        if 'features' in data and 'context' not in data:
+            # Legacy format: 'features' is [16, 1024]
+            features = data['features']
+            converted[key] = {
+                'context': features[:8],
+                'candidates': features[8:],
+                'target': data['target'],
+                'config': data['config']
+            }
+        else:
+            # Already in new format
+            converted[key] = data
+    return converted
 
 
 def verify_features(features_dir):
@@ -182,10 +237,18 @@ def verify_features(features_dir):
 
     print("Loading cached features...")
     features = torch.load(features_file, weights_only=False)
+
+    # Convert legacy format if needed
+    sample_key = list(features.keys())[0]
+    if 'features' in features[sample_key] and 'context' not in features[sample_key]:
+        print("[INFO] Converting legacy feature format...")
+        features = convert_legacy_features(features)
+        torch.save(features, features_file)
+        print("[OK] Converted and saved")
+
     print(f"[OK] Total samples: {len(features)}")
 
     # Check one sample
-    sample_key = list(features.keys())[0]
     sample = features[sample_key]
     print(f"\nSample: {sample_key}")
     print(f"  Context shape: {sample['context'].shape}")
