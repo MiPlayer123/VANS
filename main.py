@@ -25,6 +25,10 @@ Usage:
 """
 
 import os
+# CRITICAL: Set MPS fallback BEFORE any torch import
+# This allows unsupported ops (like bicubic upsample in DINOv2) to fall back to CPU
+os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
+
 import sys
 import argparse
 

@@ -1,6 +1,11 @@
 """Device detection and GPU optimizations."""
 
 import os
+
+# CRITICAL: Set MPS fallback BEFORE importing torch
+# This allows unsupported ops (like bicubic upsample in DINOv2) to fall back to CPU
+os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
+
 import gc
 import random
 import numpy as np

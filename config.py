@@ -20,14 +20,15 @@ import os
 # ENVIRONMENT
 # =========================
 USE_COLAB = False  # Set to True when running on Google Colab
-TEST_MODE = False  # Set to True for quick testing (50 samples, 1 epoch)
+TEST_MODE = False  # Set to True for quick testing (10 samples, 1 epoch)
 
 # =========================
 # PATHS - Set your defaults here
 # =========================
 DATA_DIR = "/Users/mikul/Downloads/RAVEN-10000"  # Where RAVEN data lives
 # DATA_DIR = "./data/RAVEN-10000"  # Alternative: relative path
-OUTPUT_DIR = "./outputs"  # Where to save everything (features, checkpoints, results)
+OUTPUT_DIR = "../VANS_output"  # Where to save everything (features, checkpoints, results)
+# OUTPUT_DIR = "./outputs"  # Alternative: outputs inside repo
 
 # Colab overrides (used when USE_COLAB=True)
 COLAB_DATA_DIR = "/content/drive/MyDrive/VANS/data/I-RAVEN"
@@ -125,11 +126,11 @@ def get_training_config():
     """
     if TEST_MODE:
         return {
-            'batch_size': 8,
+            'batch_size': 4,
             'max_epochs': 1,
             'patience': 1,
             'warmup_epochs': 0,
-            'num_samples_per_config': 50,
+            'num_samples_per_config': 10,  # Only 10 samples per config = 70 total
             'lr': LEARNING_RATE,
             'weight_decay': WEIGHT_DECAY,
             'alpha': LOSS_ALPHA,

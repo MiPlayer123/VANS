@@ -168,6 +168,13 @@ class Trainer:
             self.scheduler.step()
             print()
 
+        # Always save final checkpoint if no best model was saved
+        best_path = os.path.join(self.paths['checkpoint_dir'], 'best_model.pt')
+        if not os.path.exists(best_path):
+            # Save current state as best model (even if accuracy is 0)
+            self._save_checkpoint(epoch, val_acc, val_config_acc, is_best=True)
+            print("  [OK] Final model saved as best_model.pt")
+
         print(f"\n" + "="*50)
         print(f"Training complete!")
         print(f"Best validation accuracy: {self.best_val_acc:.2%}")
