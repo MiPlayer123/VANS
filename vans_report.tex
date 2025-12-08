@@ -324,10 +324,10 @@ We train for up to 100 epochs with early stopping based on validation accuracy. 
 
 \subsection{Quantitative Results}
 
-Table~\ref{tab:results} presents test set accuracy results for VANS across all seven I-RAVEN configurations. The model achieves an overall accuracy of 86.2\%, meeting our target objective of 85\%+. Performance varies across configurations, with simpler structures (center\_single, left\_right) achieving higher accuracy (90\%+) while more complex nested structures (in\_out variants) show lower but still competitive performance (78-82\%).
+Table~\ref{tab:results} presents test set accuracy results for VANS across I-RAVEN configurations. We report results on four configurations that have completed training, achieving 79.5\% accuracy on this subset. Performance varies across configurations, with simpler structures (center\_single) achieving excellent accuracy (97.1\%) while distributed grid patterns show lower performance (68-75\%). Training on additional configurations (in\_out variants, left\_right) is ongoing and expected to improve overall accuracy toward our 85\%+ target.
 
 \begin{table}[t]
-\caption{Test set accuracy (\%) for VANS across I-RAVEN configurations.}
+\caption{Test set accuracy (\%) for VANS across I-RAVEN configurations. Results shown for configurations with completed training; remaining configurations are in progress.}
 \label{tab:results}
 \vskip 0.15in
 \begin{center}
@@ -337,15 +337,16 @@ Table~\ref{tab:results} presents test set accuracy results for VANS across all s
 \toprule
 Configuration & Accuracy & Samples \\
 \midrule
-center\_single & 91.3 & 2000 \\
-distribute\_four & 88.7 & 2000 \\
-distribute\_nine & 85.2 & 2000 \\
-in\_out\_center & 81.9 & 2000 \\
-in\_out\_grid & 78.4 & 2000 \\
-left\_right & 90.1 & 2000 \\
-up\_down & 89.6 & 2000 \\
+center\_single & 97.1 & 998 \\
+distribute\_four & 68.4 & 998 \\
+distribute\_nine & 74.5 & 998 \\
+up\_down & 78.0 & 998 \\
 \midrule
-\textbf{Overall} & \textbf{86.2} & \textbf{14000} \\
+in\_out\_center & -- & -- \\
+in\_out\_grid & -- & -- \\
+left\_right & -- & -- \\
+\midrule
+\textbf{Partial (4 configs)} & \textbf{79.5} & \textbf{3992} \\
 \bottomrule
 \end{tabular}
 \end{sc}
@@ -356,7 +357,7 @@ up\_down & 89.6 & 2000 \\
 
 \subsection{Comparison with Baselines}
 
-Table~\ref{tab:baselines} compares VANS against prior methods on the RAVEN dataset. While direct comparison is limited by dataset differences (RAVEN vs. I-RAVEN), our results demonstrate significant improvements over early approaches. VANS achieves performance comparable to or exceeding ResNet+DRT (59.56\% on RAVEN), while operating on the more challenging I-RAVEN dataset with bias corrections.
+Table~\ref{tab:baselines} compares VANS against prior methods on the RAVEN dataset. While direct comparison is limited by dataset differences (RAVEN vs. I-RAVEN), our results demonstrate significant improvements over early approaches. Even with partial training on 4 configurations, VANS achieves 79.5\% accuracy, substantially outperforming ResNet+DRT (59.56\% on RAVEN) while operating on the more challenging I-RAVEN dataset with bias corrections.
 
 \begin{table}[t]
 \caption{Comparison with baseline methods (RAVEN dataset results from \cite{zhang2019raven}).}
@@ -376,7 +377,7 @@ ResNet & 53.43\% \\
 ResNet+DRT & 59.56\% \\
 Human & 84.41\% \\
 \midrule
-VANS (I-RAVEN) & 86.2\% \\
+VANS (4 configs) & 79.5\% \\
 \bottomrule
 \end{tabular}
 \end{sc}
@@ -387,7 +388,7 @@ VANS (I-RAVEN) & 86.2\% \\
 
 \subsection{Qualitative Analysis}
 
-We analyze model behavior through error patterns and attention visualizations. The model shows strongest performance on problems with clear row/column progressions (left\_right, up\_down), where structural embeddings effectively capture the pattern. Nested configurations (in\_out variants) present greater challenges, likely due to increased complexity in spatial relationships. Common failure modes include composite transformations, where problems require multiple simultaneous attribute changes that challenge the model's ability to capture all relevant pattern aspects simultaneously. Another frequent failure mode involves subtle pattern variations, where correct and incorrect candidates differ minimally, making discrimination difficult even when the model has correctly identified the underlying pattern. Additionally, complex nesting with deeply nested structures containing multiple hierarchical levels presents particular challenges, as the model must reason across multiple levels of abstraction simultaneously.
+We analyze model behavior through error patterns and attention visualizations. The model shows strongest performance on center\_single configuration (97.1\%), where single objects with clear attribute changes are easiest to track. Distributed grid configurations (distribute\_four at 68.4\%, distribute\_nine at 74.5\%) present greater challenges, likely due to increased complexity in tracking multiple objects simultaneously. The up\_down configuration achieves 78.0\% accuracy. Common failure modes include composite transformations, where problems require multiple simultaneous attribute changes that challenge the model's ability to capture all relevant pattern aspects simultaneously. Another frequent failure mode involves subtle pattern variations, where correct and incorrect candidates differ minimally, making discrimination difficult even when the model has correctly identified the underlying pattern. Error analysis reveals that the model maintains high confidence (74.5\% mean) even on incorrect predictions, suggesting systematic confusion rather than uncertainty.
 
 \subsection{Ablation Studies}
 
@@ -400,11 +401,11 @@ Several limitations are evident in our results. The model learns patterns implic
 \section{Conclusion}
 \label{sec:conclusion}
 
-We presented VANS, a transformer-based architecture for solving Raven's Progressive Matrices through context-based reasoning. Our approach combines frozen DINOv2-L visual features with a lightweight reasoning module, achieving 86.2\% accuracy on the I-RAVEN test set, meeting our target objective of 85\%+.
+We presented VANS, a transformer-based architecture for solving Raven's Progressive Matrices through context-based reasoning. Our approach combines frozen DINOv2-L visual features with a lightweight reasoning module, achieving 79.5\% accuracy on four I-RAVEN configurations with training on additional configurations ongoing.
 
 \subsection{Objectives Assessment}
 
-All three project objectives were successfully met. For architecture design, we designed and implemented a transformer-based architecture that effectively encodes context and reasons about candidates, achieving 86.2\% accuracy, which exceeds our 85\% target. For feature representation, we demonstrated that frozen DINOv2 features provide effective visual representations for RPM solving, enabling strong performance without task-specific visual training, confirming the transferability of foundation model features to visual reasoning tasks. For performance evaluation, we systematically evaluated performance across all seven I-RAVEN configurations, identifying strengths such as strong performance on simple progressions and limitations such as reduced accuracy on complex nesting structures.
+Our project objectives have been partially met with promising results. For architecture design, we designed and implemented a transformer-based architecture that effectively encodes context and reasons about candidates, achieving 79.5\% accuracy on four configurations with center\_single reaching 97.1\%. For feature representation, we demonstrated that frozen DINOv2 features provide effective visual representations for RPM solving, enabling strong performance without task-specific visual training, confirming the transferability of foundation model features to visual reasoning tasks. For performance evaluation, we systematically evaluated performance across four I-RAVEN configurations, identifying strengths such as excellent performance on simple single-object patterns (97.1\%) and areas for improvement on distributed grid configurations (68-75\%).
 
 \subsection{Key Insights}
 
@@ -418,7 +419,7 @@ This work demonstrates that combining self-supervised visual features with struc
 
 Several directions for future work are promising. Incorporating explicit transformation modeling through transformation encoders, as proposed in our comparison document, could improve interpretability and handling of composite transformations by making the learned rules more transparent. Extending the architecture to use patch tokens in addition to CLS tokens could enable finer-grained spatial reasoning, allowing the model to reason about local spatial relationships within panels rather than relying solely on global representations. Adding multi-step reasoning through iterative refinement mechanisms could better handle complex nested structures by allowing the model to progressively refine its understanding through multiple reasoning passes. Conducting generalization studies by evaluating performance on other visual reasoning benchmarks would help assess the generalizability of our approach beyond RPM problems. Finally, developing interpretability methods to visualize and understand which patterns the model learns and how it applies them would provide valuable insights into the model's reasoning process and help identify areas for improvement.
 
-In summary, VANS demonstrates that context-based reasoning with foundation model features can effectively solve Raven's Progressive Matrices, providing a strong baseline for future work in visual analogical reasoning.
+In summary, VANS demonstrates that context-based reasoning with foundation model features can effectively solve Raven's Progressive Matrices, achieving 79.5\% accuracy on four configurations with particularly strong performance on single-object patterns (97.1\%). This provides a strong baseline for future work in visual analogical reasoning, with ongoing training expected to further improve results across all seven configurations.
 
 % References
 \bibliographystyle{icml2025}
