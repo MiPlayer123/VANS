@@ -1,179 +1,278 @@
 # VANS: Visual Analogy Network Solver
 
-A deep learning system that solves Raven's Progressive Matrices (RPM) - visual analogy puzzles used in IQ tests.
+A deep learning system for solving Raven's Progressive Matrices (RPM) - visual analogy puzzles used in IQ tests. VANS uses a frozen DINOv2-L backbone for feature extraction combined with a transformer-based architecture for reasoning.
+
+## Features
+
+- **DINOv2-L Backbone**: Frozen pre-trained vision transformer for robust visual features
+- **Transformer Context Encoder**: 4-layer encoder with row/column positional embeddings
+- **Cross-Attention Reasoning**: Candidates attend to context patterns for scoring
+- **Built-in Data Generation**: Generate custom RAVEN datasets using And-Or Tree grammar
+- **Multi-Platform Support**: CUDA, Apple Silicon (MPS), and CPU
+- **Modular Design**: Separate scripts for extraction, training, and evaluation
 
 ## Architecture
 
 ```
-I-RAVEN Problem (8 context + 8 candidates)
-              │
-              ▼
-┌─────────────────────────────┐
-│  DINOv2-L (frozen)          │  ← 1024-dim features per image
-│  Pre-extract all features   │
-└─────────────────────────────┘
-              │
-              ▼
-┌─────────────────────────────┐
-│  Context Encoder            │  ← 4-layer Transformer + positional embeddings
-│  [8 x 1024] → [512]         │
-└─────────────────────────────┘
-              │
-              ▼
-┌─────────────────────────────┐
-│  Rule Reasoning Module      │  ← Cross-attention: candidates attend to context
-│  Score 8 candidates         │
-└─────────────────────────────┘
-              │
-              ▼
-        Softmax → Answer
+RAVEN Problem (8 context panels + 8 answer candidates)
+                    │
+                    ▼
+    ┌───────────────────────────────┐
+    │  DINOv2-L (frozen)            │  ← 1024-dim features per panel
+    │  Pre-extracted & cached       │
+    └───────────────────────────────┘
+                    │
+                    ▼
+    ┌───────────────────────────────┐
+    │  Context Encoder              │  ← 4-layer Transformer
+    │  Row/Col positional embeddings│     [8 × 1024] → [512]
+    └───────────────────────────────┘
+                    │
+                    ▼
+    ┌───────────────────────────────┐
+    │  Rule Reasoning Module        │  ← Cross-attention mechanism
+    │  Score each candidate         │     Candidates attend to context
+    └───────────────────────────────┘
+                    │
+                    ▼
+            Softmax → Answer (0-7)
 ```
 
-## Quick Start
-
-### 1. Install Dependencies
+## Installation
 
 ```bash
+git clone https://github.com/YOUR_USERNAME/VANS.git
+cd VANS
 pip install -r requirements.txt
 ```
 
-### 2. Configure Paths
+**Requirements**: Python 3.8+, PyTorch 2.0+
 
-Edit `config.py` to set your paths:
+## Quick Start
 
-```python
-# config.py
-DATA_DIR = "/path/to/RAVEN-10000"  # Where your RAVEN data lives
-OUTPUT_DIR = "./outputs"            # Where to save everything
-```
+### Option 1: Use Existing RAVEN Data
 
-### 3. Run
+1. Download [I-RAVEN](https://github.com/husheng12345/SRAN) or [RAVEN](https://github.com/WellyZhang/RAVEN) dataset
+2. Edit `config.py`:
+   ```python
+   DATA_DIR = "/path/to/RAVEN-10000"
+   OUTPUT_DIR = "./outputs"
+   ```
+3. Run:
+   ```bash
+   python main.py
+   ```
+
+### Option 2: Generate Your Own Data
 
 ```bash
-# Run full pipeline (extract features → train → evaluate)
+# Generate 1000 samples per configuration (7000 total)
+python main.py --generate-data --num-generate 1000
+
+# Or use the standalone script
+python scripts/generate_data.py --num-samples 1000 --save-dir ./my_data
+```
+
+### Test Mode
+
+Quick validation run (10 samples, 1 epoch):
+```bash
+python main.py --test-mode
+```
+
+## Usage
+
+### Full Pipeline
+
+```bash
+# Default settings from config.py
 python main.py
 
-# Quick test mode (1 epoch, 50 samples)
-python main.py --test-mode
+# Custom paths
+python main.py --data-dir /path/to/data --output-dir ./experiment
+
+# Generate data, then train
+python main.py --generate-data --num-generate 2000
 
 # Skip feature extraction (if already done)
 python main.py --skip-extraction
 
+# Resume from checkpoint
+python main.py --resume ./outputs/checkpoints/epoch_050.pt
+
 # Evaluation only
-python main.py --eval-only
+python main.py --eval-only --checkpoint ./outputs/checkpoints/best_model.pt
+```
+
+### Individual Scripts
+
+```bash
+# Feature extraction only
+python scripts/extract_features.py --num-samples 5000
+
+# Training only
+python scripts/train.py --epochs 100 --lr 1e-4
+
+# Evaluation only
+python scripts/evaluate.py --checkpoint ./outputs/checkpoints/best_model.pt
+
+# Data generation only
+python scripts/generate_data.py --num-samples 1000 --save-dir ./data
 ```
 
 ## Project Structure
 
 ```
 VANS/
-├── config.py                 # ⭐ EDIT THIS - All configuration in one place
-├── main.py                   # Run everything: extract → train → evaluate
+├── config.py                 # Central configuration (edit this!)
+├── main.py                   # Full pipeline entry point
+├── requirements.txt
+│
 ├── src/
 │   ├── data/
-│   │   ├── dataset.py        # CachedFeatureDataset
-│   │   └── preprocessing.py  # Image preprocessing
+│   │   ├── dataset.py        # CachedFeatureDataset, dataloaders
+│   │   └── preprocessing.py  # PIL-based image preprocessing
+│   │
+│   ├── datagen/              # RAVEN data generation module
+│   │   ├── generator.py      # High-level generation API
+│   │   ├── AoT.py            # And-Or Tree structures
+│   │   ├── Rule.py           # Rule types (Constant, Progression, etc.)
+│   │   ├── rendering.py      # Panel rendering
+│   │   ├── sampling.py       # Answer candidate sampling
+│   │   └── ...               # Additional generation utilities
+│   │
 │   ├── features/
-│   │   └── extractor.py      # DINOv2 feature extraction
+│   │   └── extractor.py      # DINOv2 feature extraction with caching
+│   │
 │   ├── models/
-│   │   ├── context_encoder.py
-│   │   ├── rule_reasoning.py
-│   │   ├── rule_predictor.py
-│   │   └── vans.py           # Main VANS model
+│   │   ├── vans.py           # Main VANS model
+│   │   ├── context_encoder.py    # Transformer encoder
+│   │   ├── rule_reasoning.py     # Cross-attention module
+│   │   └── rule_predictor.py     # Final prediction head
+│   │
 │   ├── training/
-│   │   ├── losses.py
-│   │   ├── trainer.py
-│   │   └── evaluation.py
+│   │   ├── trainer.py        # Training loop with early stopping
+│   │   ├── losses.py         # CE + margin loss
+│   │   └── evaluation.py     # Metrics and analysis
+│   │
 │   └── utils/
-│       ├── device.py         # GPU/MPS/CPU detection
-│       └── visualization.py
+│       ├── device.py         # CUDA/MPS/CPU detection
+│       └── visualization.py  # Training curves, result plots
+│
 ├── scripts/
-│   ├── extract_features.py   # Standalone extraction
-│   ├── train.py              # Training only
-│   └── evaluate.py           # Evaluation only
+│   ├── extract_features.py   # Standalone feature extraction
+│   ├── train.py              # Standalone training
+│   ├── evaluate.py           # Standalone evaluation
+│   └── generate_data.py      # Standalone data generation
+│
 ├── notebooks/
-│   └── VANS_Final.ipynb      # Original notebook
+│   └── VANS_Final.ipynb      # Original development notebook
+│
 └── outputs/                  # Created automatically
-    ├── features/             # Cached DINOv2 features
+    ├── features/             # Cached DINOv2 features (.pt files)
     ├── checkpoints/          # Model checkpoints
     └── results/              # Plots and metrics
 ```
 
 ## Configuration
 
-All configuration is in `config.py`. Key settings:
+All settings are in `config.py`. Edit this file to change defaults.
 
-### Paths
+### Key Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `DATA_DIR` | `/path/to/RAVEN` | Path to RAVEN dataset |
+| `OUTPUT_DIR` | `./outputs` | Output directory |
+| `USE_GENERATED_DATA` | `False` | Use generated data instead of existing |
+| `NUM_SAMPLES_PER_CONFIG` | `5000` | Samples per configuration (50/2000/5000/10000/None) |
+| `BATCH_SIZE` | `64` | Training batch size |
+| `MAX_EPOCHS` | `100` | Maximum training epochs |
+| `PATIENCE` | `15` | Early stopping patience |
+| `LEARNING_RATE` | `1e-4` | Initial learning rate |
+
+### Model Architecture
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `FEATURE_DIM` | `1024` | DINOv2-L output dimension |
+| `HIDDEN_DIM` | `512` | Internal model dimension |
+| `NUM_HEADS` | `8` | Transformer attention heads |
+| `NUM_LAYERS` | `4` | Transformer encoder layers |
+| `DROPOUT` | `0.1` | Dropout rate |
+
+### Environment
+
 ```python
-DATA_DIR = "/path/to/RAVEN-10000"
-OUTPUT_DIR = "./outputs"
+USE_COLAB = False      # Set True for Google Colab
+TEST_MODE = False      # Set True for quick testing
 ```
 
-### Training
-```python
-NUM_SAMPLES_PER_CONFIG = 5000  # 50 (quick), 2000 (fast), 5000 (good), 10000 (full)
-BATCH_SIZE = 64
-MAX_EPOCHS = 100
-PATIENCE = 15
-LEARNING_RATE = 1e-4
-```
+## Data Generation
 
-### Model
-```python
-HIDDEN_DIM = 512
-NUM_HEADS = 8
-NUM_LAYERS = 4
-DROPOUT = 0.1
-```
+VANS includes a built-in RAVEN dataset generator using And-Or Tree (AoT) grammar.
 
-### Test Mode
-Set `TEST_MODE = True` in config.py or use `--test-mode` flag for quick testing (1 epoch, 50 samples).
+### Configurations
 
-## Command Line Options
+| Config | Description |
+|--------|-------------|
+| `center_single` | Single shape in center |
+| `distribute_four` | 2×2 grid of shapes |
+| `distribute_nine` | 3×3 grid of shapes |
+| `left_right` | Left and right panels |
+| `up_down` | Upper and lower panels |
+| `in_out_center` | Nested shapes (inner/outer) |
+| `in_out_grid` | Grid with nested shapes |
 
-```bash
-# Full pipeline
-python main.py --data-dir /path/to/data --output-dir ./experiment1
+### Rule Types
 
-# Training only
-python scripts/train.py --epochs 50 --lr 0.0001
+- **Constant**: Attribute remains unchanged across rows
+- **Progression**: Attribute changes by fixed increment
+- **Arithmetic**: Add/subtract operations on attributes
+- **Distribute_Three**: Three values distributed across row
 
-# Feature extraction only
-python scripts/extract_features.py --num-samples 2000
+### Generated Data Format
 
-# Evaluation only
-python scripts/evaluate.py --checkpoint ./outputs/checkpoints/best_model.pt
-
-# Resume training
-python main.py --resume ./outputs/checkpoints/epoch_050.pt
-```
+Each sample is saved as an NPZ file containing:
+- `image`: 16 panels (8 context + 8 candidates), 160×160 grayscale
+- `target`: Correct answer index (0-7)
+- `meta_matrix`: Attribute metadata
+- `meta_structure`: Structural metadata
 
 ## Google Colab
 
-Set `USE_COLAB = True` in `config.py` and update the Colab paths:
-
 ```python
+# In config.py
 USE_COLAB = True
 COLAB_DATA_DIR = "/content/drive/MyDrive/VANS/data/I-RAVEN"
 COLAB_OUTPUT_DIR = "/content/drive/MyDrive/VANS"
 ```
 
-## Dataset
-
-Uses the [RAVEN](https://github.com/WellyZhang/RAVEN) dataset (specifically I-RAVEN, the bias-corrected version).
-
-- 7 configurations
-- 10,000 samples each (6000 train, 2000 val, 2000 test)
-- 70,000 total samples
-
 ## Results
 
-Target accuracy: 85-88% on I-RAVEN test set.
-
-Results are saved to `outputs/results/`:
-- `training_curves.png` - Training loss and accuracy
+Training outputs are saved to `outputs/results/`:
+- `training_curves.png` - Loss and accuracy over epochs
 - `config_breakdown.png` - Per-configuration accuracy
-- `paper_figure.png` - Summary figure for papers
+- `paper_figure.png` - Summary figure
+
+Target accuracy: **85-88%** on I-RAVEN test set.
+
+## Dataset Information
+
+### RAVEN / I-RAVEN
+
+- 7 figure configurations
+- 10,000 samples per configuration
+- 70,000 total samples (60% train, 20% val, 20% test)
+- 160×160 grayscale images
+
+**Sources**:
+- [RAVEN](https://github.com/WellyZhang/RAVEN) - Original dataset
+- [I-RAVEN](https://github.com/husheng12345/SRAN) - Bias-corrected version
+
+## License
+
+MIT License
 
 ## Team
 
@@ -182,3 +281,9 @@ Results are saved to `outputs/results/`:
 - Mikul Saravanan
 - Alice Lin
 - Angel Wu
+
+## Acknowledgments
+
+- DINOv2 by Meta AI Research
+- RAVEN dataset by Zhang et al.
+- I-RAVEN by Hu et al.
