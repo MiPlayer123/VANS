@@ -12,6 +12,11 @@ A deep learning system for solving Raven's Progressive Matrices (RPM) - visual a
 - **Multi-Platform Support**: CUDA, Apple Silicon (MPS), and CPU
 - **Modular Design**: Separate scripts for extraction, training, and evaluation
 
+## Results
+
+- 84.4% accuracy on the I-RAVEN test set across all seven configurations (matches human-level 84.41%). Previous SOTA: SRAN (60.8%), ResNet (40.3%), ResNet + DRT (40.4%), LSTM (18.9%) 
+- Per-configuration highlights: `center_single` 98.4%, `in_out_center` 91.4%, grid-style configs (`distribute_four`, `distribute_nine`) 72–77%.
+
 ## Architecture
 
 ```
