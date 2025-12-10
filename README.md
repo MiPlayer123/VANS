@@ -8,6 +8,7 @@ A deep learning system for solving Raven's Progressive Matrices (RPM) - visual a
 - **Transformer Context Encoder**: 4-layer encoder with row/column positional embeddings
 - **Cross-Attention Reasoning**: Candidates attend to context patterns for scoring
 - **Built-in Data Generation**: Generate custom RAVEN datasets using And-Or Tree grammar
+- **Multi-Dataset Support**: Trained on the bias-removed I-RAVEN dataset but supports RAVEN generation
 - **Multi-Platform Support**: CUDA, Apple Silicon (MPS), and CPU
 - **Modular Design**: Separate scripts for extraction, training, and evaluation
 
